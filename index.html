@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <title>OSS Token Mining</title>
-    <script src="https://cdn.ethers.io/lib/ethers-5.2.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
     <style>
         body { font-family: sans-serif; text-align: center; padding: 50px; background: #f4f4f4; }
         .card { background: white; padding: 20px; border-radius: 15px; display: inline-block; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
@@ -25,45 +25,59 @@
     </div>
 
 <script>
-    const miningAddress = "0xDF43915384EF8A308Ea8d923fc2bCA2574f9b5Ea";
+    // 1. Thay bằng địa chỉ Mining Contract của bạn (VÍ DỤ: 0x...)
+    const miningAddress = "0xDF43915384EF8A308Ea8d923fc2bCA2574f9b5Ea"; 
+    
+    // ABI rút gọn để web hiểu các hàm trong contract
     const abi = [
         "function claim() external",
-        "function buyPackage(uint256 packageId) external payable"
+        "function buyPackage(uint256 packageId) external payable",
+        "function lastClaimTime(address) view returns (uint256)",
+        "function miningPower(address) view returns (uint256)"
     ];
 
     let provider, signer, contract;
 
     async function connectWallet() {
-        if (window.ethereum) {
-            provider = new ethers.providers.Web3Provider(window.ethereum);
-            await provider.send("eth_requestAccounts", []);
-            signer = provider.getSigner();
-            const addr = await signer.getAddress();
-            document.getElementById("walletAddress").innerText = "Ví: " + addr;
-            contract = new ethers.Contract(miningAddress, abi, signer);
+        // Kiểm tra xem trình duyệt có MetaMask (window.ethereum) không
+        if (typeof window.ethereum !== 'undefined') {
+            try {
+                // Yêu cầu kết nối ví
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                await provider.send("eth_requestAccounts", []);
+                
+                signer = provider.getSigner();
+                const addr = await signer.getAddress();
+                
+                // Hiển thị địa chỉ ví đã rút gọn
+                document.getElementById("walletAddress").innerText = "Ví: " + addr.substring(0,6) + "..." + addr.substring(38);
+                
+                // Khởi tạo contract để thực hiện các lệnh sau này
+                contract = new ethers.Contract(miningAddress, abi, signer);
+                
+                console.log("Đã kết nối thành công!");
+            } catch (error) {
+                console.error("Người dùng từ chối kết nối hoặc lỗi:", error);
+                alert("Bạn đã từ chối kết nối ví.");
+            }
         } else {
-            alert("Hãy cài đặt MetaMask!");
+            // Nếu vẫn báo lỗi này, bạn hãy thử mở web bằng trình duyệt khác (Chrome/Brave) hoặc kiểm tra tiện ích MetaMask
+            alert("Không tìm thấy MetaMask! Nếu bạn đã cài, hãy tải lại trang hoặc kiểm tra xem MetaMask có đang bị tắt không.");
+            window.open('https://metamask.io/download/', '_blank');
         }
     }
 
     async function claimToken() {
+        if (!contract) return alert("Vui lòng kết nối ví trước!");
         try {
             const tx = await contract.claim();
-            alert("Đang xử lý... hãy chờ!");
+            alert("Giao dịch đã gửi! Đang chờ xác nhận...");
             await tx.wait();
-            alert("Claim thành công!");
+            alert("Claim thành công! 0.5 OSS đã được gửi về ví.");
         } catch (err) {
-            alert("Lỗi: " + err.data.message || err.message);
-        }
-    }
-
-    async function buyPackage() {
-        try {
-            const tx = await contract.buyPackage(1, { value: ethers.utils.parseEther("0.01") });
-            await tx.wait();
-            alert("Mua gói thành công!");
-        } catch (err) {
-            alert("Lỗi mua gói!");
+            console.error(err);
+            // Hiển thị lỗi từ Contract (ví dụ: chưa đủ 24h)
+            alert("Lỗi: " + (err.reason || "Giao dịch không thành công"));
         }
     }
 </script>
