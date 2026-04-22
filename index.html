@@ -1,83 +1,75 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <title>OSS Token Mining</title>
+    <title>OSS Mining - Ultra Low Gas</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 50px; background: #f4f4f4; }
-        .card { background: white; padding: 20px; border-radius: 15px; display: inline-block; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        button { padding: 10px 20px; margin: 10px; border: none; border-radius: 5px; cursor: pointer; background: #f3ba2f; color: black; font-weight: bold; }
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; padding: 50px; background: #0e0e0e; color: #e0e0e0; }
+        .card { background: #181818; padding: 30px; border-radius: 16px; display: inline-block; border: 1px solid #333; width: 350px; }
+        .status { margin: 15px 0; padding: 12px; border-radius: 8px; background: #222; color: #00ff88; font-family: monospace; font-size: 0.85em; }
+        button { padding: 12px; margin: 8px 0; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
+        .btn-main { background: #f3ba2f; color: #000; }
+        .btn-claim { background: #00ff88; color: #000; }
+        .btn-disconnect { background: transparent; color: #ff4d4d; border: 1px solid #ff4d4d; margin-top: 15px; }
+        button:hover { opacity: 0.8; transform: scale(1.02); }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h1>OSS Mining Center</h1>
-        <p id="walletAddress">Chưa kết nối ví</p>
-        <button onclick="connectWallet()">1. Kết nối ví</button>
-        <hr>
-        <h3>Nhận Token miễn phí</h3>
-        <p>0.5 OSS / 24h</p>
-        <button onclick="claimToken()">2. Claim OSS</button>
-        <hr>
-        <h3>Mua Gói Đào Tốc Độ Cao</h3>
-        <button onclick="buyPackage()">3. Mua Gói (0.01 BNB)</button>
+        <h2>OSS MINING</h2>
+        <div id="statusBox" class="status">Chưa kết nối ví</div>
+        
+        <button id="connectBtn" class="btn-main" onclick="connect()">Kết nối MetaMask</button>
+        
+        <div id="miningUI" class="hidden">
+            <p style="font-size: 0.9em; color: #888;">Phần thưởng: 0.5 OSS / ngày</p>
+            <button class="btn-claim" onclick="claim()">NHẬN TOKEN (CLAIM)</button>
+            <button class="btn-disconnect" onclick="disconnect()">Ngắt kết nối</button>
+        </div>
     </div>
 
 <script>
-    // 1. Thay bằng địa chỉ Mining Contract của bạn (VÍ DỤ: 0x...)
-    const miningAddress = "0xDF43915384EF8A308Ea8d923fc2bCA2574f9b5Ea"; 
-    
-    // ABI rút gọn để web hiểu các hàm trong contract
-    const abi = [
-        "function claim() external",
-        "function buyPackage(uint256 packageId) external payable",
-        "function lastClaimTime(address) view returns (uint256)",
-        "function miningPower(address) view returns (uint256)"
-    ];
+    const contractAddr = "0xDF43915384EF8A308Ea8d923fc2bCA2574f9b5Ea";
+    const abi = ["function claim() external"];
+    let signer, contract;
 
-    let provider, signer, contract;
-
-    async function connectWallet() {
-        // Kiểm tra xem trình duyệt có MetaMask (window.ethereum) không
-        if (typeof window.ethereum !== 'undefined') {
-            try {
-                // Yêu cầu kết nối ví
-                provider = new ethers.providers.Web3Provider(window.ethereum);
-                await provider.send("eth_requestAccounts", []);
-                
-                signer = provider.getSigner();
-                const addr = await signer.getAddress();
-                
-                // Hiển thị địa chỉ ví đã rút gọn
-                document.getElementById("walletAddress").innerText = "Ví: " + addr.substring(0,6) + "..." + addr.substring(38);
-                
-                // Khởi tạo contract để thực hiện các lệnh sau này
-                contract = new ethers.Contract(miningAddress, abi, signer);
-                
-                console.log("Đã kết nối thành công!");
-            } catch (error) {
-                console.error("Người dùng từ chối kết nối hoặc lỗi:", error);
-                alert("Bạn đã từ chối kết nối ví.");
-            }
-        } else {
-            // Nếu vẫn báo lỗi này, bạn hãy thử mở web bằng trình duyệt khác (Chrome/Brave) hoặc kiểm tra tiện ích MetaMask
-            alert("Không tìm thấy MetaMask! Nếu bạn đã cài, hãy tải lại trang hoặc kiểm tra xem MetaMask có đang bị tắt không.");
-            window.open('https://metamask.io/download/', '_blank');
-        }
+    async function connect() {
+        if (!window.ethereum) return alert("Cài MetaMask!");
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        const addr = await signer.getAddress();
+        
+        document.getElementById("statusBox").innerText = addr.slice(0,6) + "..." + addr.slice(-4);
+        document.getElementById("connectBtn").classList.add("hidden");
+        document.getElementById("miningUI").classList.remove("hidden");
+        
+        contract = new ethers.Contract(contractAddr, abi, signer);
     }
 
-    async function claimToken() {
-        if (!contract) return alert("Vui lòng kết nối ví trước!");
+    async function disconnect() {
+        // Xóa trạng thái giao diện
+        signer = null;
+        contract = null;
+        document.getElementById("statusBox").innerText = "Đã ngắt kết nối";
+        document.getElementById("connectBtn").classList.remove("hidden");
+        document.getElementById("miningUI").classList.add("hidden");
+    }
+
+    async function claim() {
         try {
-            const tx = await contract.claim();
-            alert("Giao dịch đã gửi! Đang chờ xác nhận...");
+            // Gửi giao dịch với thiết lập Gas tối ưu
+            const tx = await contract.claim({
+                gasLimit: 60000 // Giới hạn gas thấp để tránh lãng phí
+            });
+            alert("Đang xử lý giao dịch...");
             await tx.wait();
-            alert("Claim thành công! 0.5 OSS đã được gửi về ví.");
-        } catch (err) {
-            console.error(err);
-            // Hiển thị lỗi từ Contract (ví dụ: chưa đủ 24h)
-            alert("Lỗi: " + (err.reason || "Giao dịch không thành công"));
+            alert("Thành công!");
+        } catch (e) {
+            alert("Lỗi: " + (e.reason || "Xem console log"));
+            console.error(e);
         }
     }
 </script>
