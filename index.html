@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <title>OSS Token Mining</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.2.umd.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; background: #f4f4f4; }
+        .card { background: white; padding: 20px; border-radius: 15px; display: inline-block; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        button { padding: 10px 20px; margin: 10px; border: none; border-radius: 5px; cursor: pointer; background: #f3ba2f; color: black; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>OSS Mining Center</h1>
+        <p id="walletAddress">Chưa kết nối ví</p>
+        <button onclick="connectWallet()">1. Kết nối ví</button>
+        <hr>
+        <h3>Nhận Token miễn phí</h3>
+        <p>0.5 OSS / 24h</p>
+        <button onclick="claimToken()">2. Claim OSS</button>
+        <hr>
+        <h3>Mua Gói Đào Tốc Độ Cao</h3>
+        <button onclick="buyPackage()">3. Mua Gói (0.01 BNB)</button>
+    </div>
+
+<script>
+    const miningAddress = "0xDF43915384EF8A308Ea8d923fc2bCA2574f9b5Ea";
+    const abi = [
+        "function claim() external",
+        "function buyPackage(uint256 packageId) external payable"
+    ];
+
+    let provider, signer, contract;
+
+    async function connectWallet() {
+        if (window.ethereum) {
+            provider = new ethers.providers.Web3Provider(window.ethereum);
+            await provider.send("eth_requestAccounts", []);
+            signer = provider.getSigner();
+            const addr = await signer.getAddress();
+            document.getElementById("walletAddress").innerText = "Ví: " + addr;
+            contract = new ethers.Contract(miningAddress, abi, signer);
+        } else {
+            alert("Hãy cài đặt MetaMask!");
+        }
+    }
+
+    async function claimToken() {
+        try {
+            const tx = await contract.claim();
+            alert("Đang xử lý... hãy chờ!");
+            await tx.wait();
+            alert("Claim thành công!");
+        } catch (err) {
+            alert("Lỗi: " + err.data.message || err.message);
+        }
+    }
+
+    async function buyPackage() {
+        try {
+            const tx = await contract.buyPackage(1, { value: ethers.utils.parseEther("0.01") });
+            await tx.wait();
+            alert("Mua gói thành công!");
+        } catch (err) {
+            alert("Lỗi mua gói!");
+        }
+    }
+</script>
+</body>
+</html>
