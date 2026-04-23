@@ -77,13 +77,19 @@ contract OSSToken {
         return true;
     }
 
+    function fundClaimPool(uint256 amount) external onlyOwner returns (bool) {
+        _transfer(msg.sender, address(this), amount);
+        return true;
+    }
+
     function _transfer(address from, address to, uint256 amount) internal {
         require(from != address(0) && to != address(0), "OSS: zero address");
         require(balanceOf[from] >= amount, "OSS: insufficient balance");
 
-        uint256 burnAmount = (amount * burnTaxBps) / BPS_DENOMINATOR;
-        uint256 reflectionAmount = (amount * reflectionTaxBps) / BPS_DENOMINATOR;
-        uint256 liquidityAmount = (amount * liquidityTaxBps) / BPS_DENOMINATOR;
+        bool takeFee = from != address(this) && to != address(this);
+        uint256 burnAmount = takeFee ? (amount * burnTaxBps) / BPS_DENOMINATOR : 0;
+        uint256 reflectionAmount = takeFee ? (amount * reflectionTaxBps) / BPS_DENOMINATOR : 0;
+        uint256 liquidityAmount = takeFee ? (amount * liquidityTaxBps) / BPS_DENOMINATOR : 0;
         uint256 taxAmount = burnAmount + reflectionAmount + liquidityAmount;
         uint256 sendAmount = amount - taxAmount;
 
