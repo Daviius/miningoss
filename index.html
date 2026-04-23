@@ -10,9 +10,11 @@
         button { padding: 12px; margin: 8px 0; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
         .btn-main { background: #f3ba2f; color: #000; }
         .btn-claim { background: #00ff88; color: #000; }
+        .btn-claim:disabled { background: #666; color: #999; cursor: not-allowed; opacity: 0.6; }
         .btn-disconnect { background: transparent; color: #ff4d4d; border: 1px solid #ff4d4d; margin-top: 15px; }
-        button:hover { opacity: 0.8; transform: scale(1.02); }
+        button:hover:not(:disabled) { opacity: 0.8; transform: scale(1.02); }
         .hidden { display: none; }
+        .countdown { color: #ff9800; margin: 10px 0; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -25,14 +27,14 @@
         
         <div id="miningUI" class="hidden">
             <p style="font-size: 0.9em; color: #888;">Phần thưởng: 0.5 OSS / ngày</p>
-            <button class="btn-claim" onclick="claim()">NHẬN TOKEN (CLAIM)</button>
+            <div id="cooldownBox" class="countdown hidden"></div>
+            <button id="claimBtn" class="btn-claim" onclick="claim()">NHẬN TOKEN (CLAIM)</button>
             <button class="btn-disconnect" onclick="disconnect()">Ngắt kết nối</button>
         </div>
     </div>
 
 <script>
     const contractAddr = "0x6E3f9f632569080cb9041C96C08DB9547199Cc62";
-    // ABI cập nhật với stateMutability
     const abi = [
         {
             "type": "function",
@@ -42,6 +44,10 @@
             "stateMutability": "nonpayable"
         }
     ];
+    
+    const COOLDOWN_TIME = 24 * 60 * 60 * 1000; // 24 giờ = 86,400,000ms
+    const STORAGE_KEY = "lastClaimTime";
+    
     let signer, contract;
 
     async function connect() {
@@ -56,6 +62,9 @@
         document.getElementById("miningUI").classList.remove("hidden");
         
         contract = new ethers.Contract(contractAddr, abi, signer);
+        
+        // Kiểm tra cooldown khi vừa connect
+        checkCooldown();
     }
 
     async function disconnect() {
@@ -64,27 +73,110 @@
         document.getElementById("statusBox").innerText = "Đã ngắt kết nối";
         document.getElementById("connectBtn").classList.remove("hidden");
         document.getElementById("miningUI").classList.add("hidden");
+        document.getElementById("cooldownBox").classList.add("hidden");
+    }
+
+    function checkCooldown() {
+        const lastClaim = localStorage.getItem(STORAGE_KEY);
+        const now = Date.now();
+        
+        if (!lastClaim) {
+            // Chưa claim bao giờ
+            enableClaim();
+            return;
+        }
+        
+        const timePassed = now - parseInt(lastClaim);
+        
+        if (timePassed >= COOLDOWN_TIME) {
+            // Đã đủ 24 giờ
+            enableClaim();
+        } else {
+            // Còn đang cooldown
+            const timeRemaining = COOLDOWN_TIME - timePassed;
+            disableClaim(timeRemaining);
+        }
+    }
+
+    function enableClaim() {
+        const claimBtn = document.getElementById("claimBtn");
+        const cooldownBox = document.getElementById("cooldownBox");
+        
+        claimBtn.disabled = false;
+        claimBtn.innerText = "NHẬN TOKEN (CLAIM)";
+        cooldownBox.classList.add("hidden");
+    }
+
+    function disableClaim(timeRemaining) {
+        const claimBtn = document.getElementById("claimBtn");
+        const cooldownBox = document.getElementById("cooldownBox");
+        
+        claimBtn.disabled = true;
+        cooldownBox.classList.remove("hidden");
+        
+        // Cập nhật đếm ngược mỗi giây
+        updateCountdown(timeRemaining);
+        
+        const interval = setInterval(() => {
+            const newRemaining = parseInt(localStorage.getItem(STORAGE_KEY)) + COOLDOWN_TIME - Date.now();
+            
+            if (newRemaining <= 0) {
+                clearInterval(interval);
+                enableClaim();
+            } else {
+                updateCountdown(newRemaining);
+            }
+        }, 1000);
+    }
+
+    function updateCountdown(ms) {
+        const hours = Math.floor(ms / (60 * 60 * 1000));
+        const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+        const seconds = Math.floor((ms % (60 * 1000)) / 1000);
+        
+        document.getElementById("cooldownBox").innerText = 
+            `⏱️ Quay lại sau: ${hours}h ${minutes}m ${seconds}s`;
     }
 
     async function claim() {
         try {
+            // Kiểm tra cooldown trước khi claim
+            const lastClaim = localStorage.getItem(STORAGE_KEY);
+            const now = Date.now();
+            
+            if (lastClaim) {
+                const timePassed = now - parseInt(lastClaim);
+                if (timePassed < COOLDOWN_TIME) {
+                    alert("❌ Bạn phải chờ 24 giờ để claim lần tiếp theo!");
+                    return;
+                }
+            }
+            
+            // Disable button trong khi xử lý
+            document.getElementById("claimBtn").disabled = true;
             document.getElementById("statusBox").innerText = "Đang xử lý...";
             
-            // Tính toán gas tự động, nếu lỗi thì dùng gas cao hơn
             const tx = await contract.claim({
-                gasLimit: ethers.utils.hexlify(200000) // Tăng gas limit
+                gasLimit: ethers.utils.hexlify(200000)
             });
             
             document.getElementById("statusBox").innerText = "Đang đợi xác nhận...";
             await tx.wait();
             
+            // Lưu thời gian claim
+            localStorage.setItem(STORAGE_KEY, Date.now().toString());
+            
             document.getElementById("statusBox").innerText = "✅ Thành công!";
-            alert("Nhận token thành công!");
+            alert("✅ Nhận token thành công! Quay lại sau 24 giờ.");
+            
+            // Bắt đầu cooldown
+            const timeRemaining = COOLDOWN_TIME;
+            disableClaim(timeRemaining);
+            
         } catch (e) {
             console.error("Chi tiết lỗi:", e);
             const errorMsg = e.reason || e.message || "Lỗi không xác định";
             
-            // Kiểm tra loại lỗi
             if (e.code === "INSUFFICIENT_FUNDS") {
                 alert("❌ Không đủ gas fee");
             } else if (e.code === "CALL_EXCEPTION") {
@@ -94,8 +186,16 @@
             }
             
             document.getElementById("statusBox").innerText = "Kết nối ví";
+            document.getElementById("claimBtn").disabled = false;
         }
     }
+
+    // Kiểm tra cooldown khi tải trang
+    window.addEventListener('load', () => {
+        if (document.getElementById("miningUI").classList.contains("hidden") === false) {
+            checkCooldown();
+        }
+    });
 </script>
 </body>
 </html>
