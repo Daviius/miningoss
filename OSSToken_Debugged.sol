@@ -15,7 +15,7 @@ contract OSSToken {
     uint256 public liquidityTaxBps = 200;  // 2%
     uint256 private constant BPS_DENOMINATOR = 10_000;
 
-    uint256 public claimAmount = 0.5 ether;
+    uint256 public claimAmount = 0.5 ether; // 0.5 OSS (18 decimals)
     uint256 public claimCooldown = 1 days;
 
     mapping(address => uint256) public balanceOf;
@@ -70,6 +70,7 @@ contract OSSToken {
 
     function claim() external returns (bool) {
         require(block.timestamp >= lastClaimAt[msg.sender] + claimCooldown, "OSS: claim cooldown");
+        require(balanceOf[address(this)] >= claimAmount, "OSS: empty claim pool");
         lastClaimAt[msg.sender] = block.timestamp;
 
         _transfer(address(this), msg.sender, claimAmount);
