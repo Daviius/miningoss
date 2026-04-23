@@ -1,201 +1,593 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <title>OSS Mining - Ultra Low Gas</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OSS Claim - Arbitrum Sepolia</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; text-align: center; padding: 50px; background: #0e0e0e; color: #e0e0e0; }
-        .card { background: #181818; padding: 30px; border-radius: 16px; display: inline-block; border: 1px solid #333; width: 350px; }
-        .status { margin: 15px 0; padding: 12px; border-radius: 8px; background: #222; color: #00ff88; font-family: monospace; font-size: 0.85em; }
-        button { padding: 12px; margin: 8px 0; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
-        .btn-main { background: #f3ba2f; color: #000; }
-        .btn-claim { background: #00ff88; color: #000; }
-        .btn-claim:disabled { background: #666; color: #999; cursor: not-allowed; opacity: 0.6; }
-        .btn-disconnect { background: transparent; color: #ff4d4d; border: 1px solid #ff4d4d; margin-top: 15px; }
-        button:hover:not(:disabled) { opacity: 0.8; transform: scale(1.02); }
-        .hidden { display: none; }
-        .countdown { color: #ff9800; margin: 10px 0; font-weight: bold; }
+        :root {
+            color-scheme: dark;
+            --bg: #080b12;
+            --card: #101828;
+            --border: #1f2a44;
+            --accent-blue: #4da3ff;
+            --accent-yellow: #f4c542;
+            --text: #e8eefc;
+            --muted: #95a3bf;
+            --ok: #2ecc71;
+            --error: #ff6b6b;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at top, #152443 0%, var(--bg) 55%);
+            color: var(--text);
+            font-family: Inter, "Segoe UI", Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .card {
+            width: min(100%, 500px);
+            background: linear-gradient(180deg, #111c32 0%, var(--card) 100%);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 20px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 1.4rem;
+            color: var(--accent-yellow);
+        }
+
+        .sub {
+            color: var(--muted);
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .info-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 10px;
+            text-align: left;
+        }
+
+        .label {
+            display: block;
+            color: var(--muted);
+            font-size: 0.72rem;
+            margin-bottom: 4px;
+        }
+
+        .value {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .status {
+            margin: 12px 0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            border: 1px solid #2a3352;
+            background: #121a2c;
+            color: var(--text);
+            font-size: 0.88rem;
+            word-break: break-word;
+        }
+
+        .status--connected { color: var(--ok); }
+        .status--processing { color: var(--accent-yellow); }
+        .status--success { color: var(--ok); }
+        .status--error { color: var(--error); }
+
+        .network-line,
+        .wallet-line,
+        .balance-line {
+            margin: 8px 0;
+            padding: 10px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.85rem;
+        }
+
+        .countdown {
+            margin: 10px 0;
+            color: var(--accent-yellow);
+            font-weight: 700;
+            min-height: 20px;
+        }
+
+        .actions {
+            display: grid;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        button {
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.15s ease, opacity 0.15s ease;
+            width: 100%;
+        }
+
+        button:hover:not(:disabled) { transform: translateY(-1px); }
+        button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+        .btn-main { background: var(--accent-blue); color: #03122a; }
+        .btn-claim { background: var(--accent-yellow); color: #241600; }
+        .btn-switch { background: #235b9a; color: #d8ebff; }
+        .btn-disconnect {
+            background: transparent;
+            color: #ffc9c9;
+            border: 1px solid rgba(255, 107, 107, 0.6);
+        }
+
+        .loading {
+            display: none;
+            margin-top: 8px;
+            color: var(--accent-yellow);
+            font-size: 0.86rem;
+        }
+
+        .loading.show { display: block; }
+        .hidden { display: none !important; }
+
+        @media (max-width: 560px) {
+            .info-grid { grid-template-columns: 1fr; }
+            .card { padding: 16px; }
+        }
     </style>
 </head>
 <body>
+    <main class="card">
+        <h1>OSS Daily Claim</h1>
+        <div class="sub">Nhận OSS mỗi ngày trên Arbitrum Sepolia</div>
 
-    <div class="card">
-        <h2>OSS MINING</h2>
+        <section class="info-grid">
+            <div class="info-item">
+                <span class="label">Phần thưởng</span>
+                <span class="value">0.5 OSS / ngày</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Gas ước tính</span>
+                <span class="value">~$0.0001</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Network</span>
+                <span class="value">Arbitrum Sepolia</span>
+            </div>
+        </section>
+
         <div id="statusBox" class="status">Chưa kết nối ví</div>
-        
-        <button id="connectBtn" class="btn-main" onclick="connect()">Kết nối MetaMask</button>
-        
-        <div id="miningUI" class="hidden">
-            <p style="font-size: 0.9em; color: #888;">Phần thưởng: 0.5 OSS / ngày</p>
-            <div id="cooldownBox" class="countdown hidden"></div>
-            <button id="claimBtn" class="btn-claim" onclick="claim()">NHẬN TOKEN (CLAIM)</button>
-            <button class="btn-disconnect" onclick="disconnect()">Ngắt kết nối</button>
+        <div id="networkLine" class="network-line">Mạng hiện tại: Chưa xác định</div>
+        <div id="walletLine" class="wallet-line">Ví: Chưa kết nối</div>
+        <div id="balanceLine" class="balance-line">Số dư OSS: --</div>
+        <div id="cooldownBox" class="countdown"></div>
+
+        <div class="actions">
+            <button id="connectBtn" class="btn-main">Kết nối MetaMask</button>
+            <button id="switchBtn" class="btn-switch hidden">Chuyển sang Arbitrum Sepolia</button>
+            <button id="claimBtn" class="btn-claim" disabled>NHẬN TOKEN (CLAIM)</button>
+            <button id="disconnectBtn" class="btn-disconnect hidden">Ngắt kết nối</button>
         </div>
-    </div>
 
-<script>
-    const contractAddr = "0x6E3f9f632569080cb9041C96C08DB9547199Cc62";
-    const abi = [
-        {
-            "type": "function",
-            "name": "claim",
-            "inputs": [],
-            "outputs": [],
-            "stateMutability": "nonpayable"
-        }
-    ];
-    
-    const COOLDOWN_TIME = 24 * 60 * 60 * 1000; // 24 giờ = 86,400,000ms
-    const STORAGE_KEY = "lastClaimTime";
-    
-    let signer, contract;
+        <div id="loading" class="loading">⏳ Đang xử lý giao dịch...</div>
+    </main>
 
-    async function connect() {
-        if (!window.ethereum) return alert("Cài MetaMask!");
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
-        await provider.send("eth_requestAccounts", []);
-        signer = provider.getSigner();
-        const addr = await signer.getAddress();
-        
-        document.getElementById("statusBox").innerText = addr.slice(0,6) + "..." + addr.slice(-4);
-        document.getElementById("connectBtn").classList.add("hidden");
-        document.getElementById("miningUI").classList.remove("hidden");
-        
-        contract = new ethers.Contract(contractAddr, abi, signer);
-        
-        // Kiểm tra cooldown khi vừa connect
-        checkCooldown();
-    }
+    <script>
+        const CONTRACT_ADDRESS = "0x28d67a8d48DE8654d135E53231B2dEbEaEd7830F";
+        const TARGET_CHAIN_ID = "0x66eee";
+        const TARGET_CHAIN_ID_DEC = 421614;
+        const RPC_URL = "https://sepolia-rollup.arbitrum.io/rpc";
+        const COOLDOWN_TIME = 24 * 60 * 60 * 1000;
+        const DAILY_REWARD = "0.5";
+        const DAILY_REWARD_WEI = ethers.utils.parseUnits(DAILY_REWARD, 18);
 
-    async function disconnect() {
-        signer = null;
-        contract = null;
-        document.getElementById("statusBox").innerText = "Đã ngắt kết nối";
-        document.getElementById("connectBtn").classList.remove("hidden");
-        document.getElementById("miningUI").classList.add("hidden");
-        document.getElementById("cooldownBox").classList.add("hidden");
-    }
-
-    function checkCooldown() {
-        const lastClaim = localStorage.getItem(STORAGE_KEY);
-        const now = Date.now();
-        
-        if (!lastClaim) {
-            // Chưa claim bao giờ
-            enableClaim();
-            return;
-        }
-        
-        const timePassed = now - parseInt(lastClaim);
-        
-        if (timePassed >= COOLDOWN_TIME) {
-            // Đã đủ 24 giờ
-            enableClaim();
-        } else {
-            // Còn đang cooldown
-            const timeRemaining = COOLDOWN_TIME - timePassed;
-            disableClaim(timeRemaining);
-        }
-    }
-
-    function enableClaim() {
-        const claimBtn = document.getElementById("claimBtn");
-        const cooldownBox = document.getElementById("cooldownBox");
-        
-        claimBtn.disabled = false;
-        claimBtn.innerText = "NHẬN TOKEN (CLAIM)";
-        cooldownBox.classList.add("hidden");
-    }
-
-    function disableClaim(timeRemaining) {
-        const claimBtn = document.getElementById("claimBtn");
-        const cooldownBox = document.getElementById("cooldownBox");
-        
-        claimBtn.disabled = true;
-        cooldownBox.classList.remove("hidden");
-        
-        // Cập nhật đếm ngược mỗi giây
-        updateCountdown(timeRemaining);
-        
-        const interval = setInterval(() => {
-            const newRemaining = parseInt(localStorage.getItem(STORAGE_KEY)) + COOLDOWN_TIME - Date.now();
-            
-            if (newRemaining <= 0) {
-                clearInterval(interval);
-                enableClaim();
-            } else {
-                updateCountdown(newRemaining);
+        const abi = [
+            {
+                "type": "function",
+                "name": "transfer",
+                "inputs": [
+                    { "name": "to", "type": "address" },
+                    { "name": "amount", "type": "uint256" }
+                ],
+                "outputs": [{ "type": "bool" }],
+                "stateMutability": "nonpayable"
+            },
+            {
+                "type": "function",
+                "name": "balanceOf",
+                "inputs": [{ "name": "account", "type": "address" }],
+                "outputs": [{ "type": "uint256" }],
+                "stateMutability": "view"
             }
-        }, 1000);
-    }
+        ];
 
-    function updateCountdown(ms) {
-        const hours = Math.floor(ms / (60 * 60 * 1000));
-        const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
-        const seconds = Math.floor((ms % (60 * 1000)) / 1000);
-        
-        document.getElementById("cooldownBox").innerText = 
-            `⏱️ Quay lại sau: ${hours}h ${minutes}m ${seconds}s`;
-    }
+        let provider = null;
+        let signer = null;
+        let contract = null;
+        let currentAccount = null;
+        let countdownTimer = null;
+        let isProcessing = false;
+        let isCorrectNetwork = false;
+        let cooldownRemaining = 0;
 
-    async function claim() {
-        try {
-            // Kiểm tra cooldown trước khi claim
-            const lastClaim = localStorage.getItem(STORAGE_KEY);
-            const now = Date.now();
-            
-            if (lastClaim) {
-                const timePassed = now - parseInt(lastClaim);
-                if (timePassed < COOLDOWN_TIME) {
-                    alert("❌ Bạn phải chờ 24 giờ để claim lần tiếp theo!");
+        const statusBox = document.getElementById("statusBox");
+        const networkLine = document.getElementById("networkLine");
+        const walletLine = document.getElementById("walletLine");
+        const balanceLine = document.getElementById("balanceLine");
+        const cooldownBox = document.getElementById("cooldownBox");
+        const loading = document.getElementById("loading");
+        const connectBtn = document.getElementById("connectBtn");
+        const switchBtn = document.getElementById("switchBtn");
+        const claimBtn = document.getElementById("claimBtn");
+        const disconnectBtn = document.getElementById("disconnectBtn");
+
+        function shortAddress(address) {
+            return `${address.slice(0, 6)}...${address.slice(-4)}`;
+        }
+
+        function claimStorageKey(address) {
+            return `oss_last_claim_${address.toLowerCase()}`;
+        }
+
+        function setStatus(message, type = "") {
+            statusBox.className = "status";
+            if (type) {
+                statusBox.classList.add(`status--${type}`);
+            }
+            statusBox.textContent = message;
+        }
+
+        function updateClaimButtonState() {
+            const canClaim = !!currentAccount && isCorrectNetwork && !isProcessing && cooldownRemaining <= 0;
+            claimBtn.disabled = !canClaim;
+            if (isProcessing) {
+                claimBtn.textContent = "Đang xử lý...";
+                loading.classList.add("show");
+            } else {
+                claimBtn.textContent = "NHẬN TOKEN (CLAIM)";
+                loading.classList.remove("show");
+            }
+        }
+
+        function stopCountdown() {
+            if (countdownTimer) {
+                clearInterval(countdownTimer);
+                countdownTimer = null;
+            }
+        }
+
+        function renderCountdown(ms) {
+            const hours = Math.floor(ms / 3600000);
+            const minutes = Math.floor((ms % 3600000) / 60000);
+            const seconds = Math.floor((ms % 60000) / 1000);
+            cooldownBox.textContent = `⏱️ Quay lại sau: ${hours}h ${minutes}m ${seconds}s`;
+        }
+
+        function checkCooldown() {
+            stopCountdown();
+            cooldownRemaining = 0;
+            cooldownBox.textContent = "";
+
+            if (!currentAccount) {
+                updateClaimButtonState();
+                return;
+            }
+
+            const lastClaim = localStorage.getItem(claimStorageKey(currentAccount));
+            if (!lastClaim) {
+                updateClaimButtonState();
+                return;
+            }
+
+            const remaining = parseInt(lastClaim, 10) + COOLDOWN_TIME - Date.now();
+            if (remaining <= 0) {
+                updateClaimButtonState();
+                return;
+            }
+
+            cooldownRemaining = remaining;
+            renderCountdown(cooldownRemaining);
+            updateClaimButtonState();
+
+            countdownTimer = setInterval(() => {
+                const last = localStorage.getItem(claimStorageKey(currentAccount));
+                if (!last) {
+                    stopCountdown();
+                    cooldownRemaining = 0;
+                    cooldownBox.textContent = "";
+                    updateClaimButtonState();
+                    return;
+                }
+
+                cooldownRemaining = parseInt(last, 10) + COOLDOWN_TIME - Date.now();
+                if (cooldownRemaining <= 0) {
+                    stopCountdown();
+                    cooldownRemaining = 0;
+                    cooldownBox.textContent = "";
+                } else {
+                    renderCountdown(cooldownRemaining);
+                }
+                updateClaimButtonState();
+            }, 1000);
+        }
+
+        async function refreshNetworkState() {
+            if (!provider) {
+                isCorrectNetwork = false;
+                networkLine.textContent = "Mạng hiện tại: Chưa xác định";
+                switchBtn.classList.add("hidden");
+                updateClaimButtonState();
+                return;
+            }
+
+            const network = await provider.getNetwork();
+            isCorrectNetwork = network.chainId === TARGET_CHAIN_ID_DEC;
+            if (isCorrectNetwork) {
+                networkLine.textContent = "Mạng hiện tại: Arbitrum Sepolia ✅";
+                switchBtn.classList.add("hidden");
+            } else {
+                networkLine.textContent = `Mạng hiện tại: Sai mạng (chainId ${network.chainId})`;
+                switchBtn.classList.remove("hidden");
+            }
+            updateClaimButtonState();
+        }
+
+        async function refreshBalance() {
+            if (!contract || !currentAccount) {
+                balanceLine.textContent = "Số dư OSS: --";
+                return;
+            }
+
+            try {
+                const raw = await contract.balanceOf(currentAccount);
+                const formatted = Number(ethers.utils.formatUnits(raw, 18));
+                balanceLine.textContent = `Số dư OSS: ${formatted.toLocaleString("en-US", {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 6
+                })}`;
+            } catch (error) {
+                balanceLine.textContent = "Số dư OSS: Không đọc được";
+            }
+        }
+
+        async function connectWallet() {
+            if (!window.ethereum) {
+                setStatus("Lỗi: Chưa cài MetaMask", "error");
+                return;
+            }
+
+            try {
+                provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+                await provider.send("eth_requestAccounts", []);
+                signer = provider.getSigner();
+                currentAccount = await signer.getAddress();
+                contract = new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
+
+                walletLine.textContent = `Ví: ${shortAddress(currentAccount)}`;
+                connectBtn.classList.add("hidden");
+                disconnectBtn.classList.remove("hidden");
+
+                await refreshNetworkState();
+                await refreshBalance();
+                checkCooldown();
+
+                setStatus(`Đã kết nối: ${shortAddress(currentAccount)}`, "connected");
+            } catch (error) {
+                setStatus(`Lỗi kết nối: ${extractError(error)}`, "error");
+            }
+        }
+
+        function disconnectWallet() {
+            stopCountdown();
+            provider = null;
+            signer = null;
+            contract = null;
+            currentAccount = null;
+            isCorrectNetwork = false;
+            isProcessing = false;
+            cooldownRemaining = 0;
+
+            walletLine.textContent = "Ví: Chưa kết nối";
+            balanceLine.textContent = "Số dư OSS: --";
+            networkLine.textContent = "Mạng hiện tại: Chưa xác định";
+            cooldownBox.textContent = "";
+
+            connectBtn.classList.remove("hidden");
+            switchBtn.classList.add("hidden");
+            disconnectBtn.classList.add("hidden");
+            setStatus("Đã ngắt kết nối", "");
+            updateClaimButtonState();
+        }
+
+        async function switchNetwork() {
+            if (!window.ethereum) {
+                setStatus("Lỗi: Chưa cài MetaMask", "error");
+                return;
+            }
+
+            try {
+                await window.ethereum.request({
+                    method: "wallet_switchEthereumChain",
+                    params: [{ chainId: TARGET_CHAIN_ID }]
+                });
+            } catch (error) {
+                if (error.code === 4902) {
+                    await window.ethereum.request({
+                        method: "wallet_addEthereumChain",
+                        params: [{
+                            chainId: TARGET_CHAIN_ID,
+                            chainName: "Arbitrum Sepolia",
+                            rpcUrls: [RPC_URL],
+                            nativeCurrency: {
+                                name: "ETH",
+                                symbol: "ETH",
+                                decimals: 18
+                            },
+                            blockExplorerUrls: ["https://sepolia.arbiscan.io"]
+                        }]
+                    });
+                } else {
+                    setStatus(`Không thể chuyển mạng: ${extractError(error)}`, "error");
                     return;
                 }
             }
-            
-            // Disable button trong khi xử lý
-            document.getElementById("claimBtn").disabled = true;
-            document.getElementById("statusBox").innerText = "Đang xử lý...";
-            
-            const tx = await contract.claim({
-                gasLimit: ethers.utils.hexlify(200000)
-            });
-            
-            document.getElementById("statusBox").innerText = "Đang đợi xác nhận...";
-            await tx.wait();
-            
-            // Lưu thời gian claim
-            localStorage.setItem(STORAGE_KEY, Date.now().toString());
-            
-            document.getElementById("statusBox").innerText = "✅ Thành công!";
-            alert("✅ Nhận token thành công! Quay lại sau 24 giờ.");
-            
-            // Bắt đầu cooldown
-            const timeRemaining = COOLDOWN_TIME;
-            disableClaim(timeRemaining);
-            
-        } catch (e) {
-            console.error("Chi tiết lỗi:", e);
-            const errorMsg = e.reason || e.message || "Lỗi không xác định";
-            
-            if (e.code === "INSUFFICIENT_FUNDS") {
-                alert("❌ Không đủ gas fee");
-            } else if (e.code === "CALL_EXCEPTION") {
-                alert("❌ Contract lỗi: " + errorMsg);
-            } else {
-                alert("❌ Lỗi: " + errorMsg);
-            }
-            
-            document.getElementById("statusBox").innerText = "Kết nối ví";
-            document.getElementById("claimBtn").disabled = false;
-        }
-    }
 
-    // Kiểm tra cooldown khi tải trang
-    window.addEventListener('load', () => {
-        if (document.getElementById("miningUI").classList.contains("hidden") === false) {
-            checkCooldown();
+            await refreshNetworkState();
+            if (isCorrectNetwork) {
+                setStatus("Đã chuyển sang Arbitrum Sepolia", "success");
+                await refreshBalance();
+            }
         }
-    });
-</script>
+
+        function extractError(error) {
+            if (!error) return "Lỗi không xác định";
+            if (error.code === 4001) return "Bạn đã từ chối giao dịch";
+            if (error.code === "INSUFFICIENT_FUNDS") return "Không đủ ETH để trả gas";
+            if (error.code === "NETWORK_ERROR") return "Lỗi kết nối mạng";
+            return (
+                error.reason ||
+                error.data?.message ||
+                error.error?.message ||
+                error.message ||
+                "Lỗi không xác định"
+            );
+        }
+
+        async function claimToken() {
+            if (!contract || !currentAccount) {
+                setStatus("Vui lòng kết nối ví trước", "error");
+                return;
+            }
+            if (!isCorrectNetwork) {
+                setStatus("Sai mạng. Hãy chuyển sang Arbitrum Sepolia", "error");
+                return;
+            }
+            if (cooldownRemaining > 0) {
+                setStatus("Bạn đang trong thời gian cooldown 24 giờ", "error");
+                return;
+            }
+
+            try {
+                isProcessing = true;
+                setStatus("Đang gửi giao dịch claim...", "processing");
+                updateClaimButtonState();
+
+                const tx = await contract.transfer(currentAccount, DAILY_REWARD_WEI);
+                setStatus("Đang chờ xác nhận giao dịch...", "processing");
+                await tx.wait();
+
+                localStorage.setItem(claimStorageKey(currentAccount), Date.now().toString());
+                checkCooldown();
+                await refreshBalance();
+                setStatus("✅ Claim thành công 0.5 OSS", "success");
+            } catch (error) {
+                setStatus(`Claim thất bại: ${extractError(error)}`, "error");
+            } finally {
+                isProcessing = false;
+                updateClaimButtonState();
+            }
+        }
+
+        function registerWalletListeners() {
+            if (!window.ethereum) return;
+
+            window.ethereum.on("accountsChanged", async (accounts) => {
+                if (!accounts || accounts.length === 0) {
+                    disconnectWallet();
+                    return;
+                }
+
+                if (!provider) {
+                    provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+                }
+
+                signer = provider.getSigner();
+                currentAccount = accounts[0];
+                contract = new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
+
+                walletLine.textContent = `Ví: ${shortAddress(currentAccount)}`;
+                connectBtn.classList.add("hidden");
+                disconnectBtn.classList.remove("hidden");
+
+                await refreshNetworkState();
+                await refreshBalance();
+                checkCooldown();
+                setStatus(`Đã kết nối: ${shortAddress(currentAccount)}`, "connected");
+            });
+
+            window.ethereum.on("chainChanged", async () => {
+                if (!provider) return;
+                await refreshNetworkState();
+                if (currentAccount) {
+                    await refreshBalance();
+                    checkCooldown();
+                }
+            });
+        }
+
+        async function tryAutoReconnect() {
+            if (!window.ethereum) {
+                setStatus("Chưa kết nối ví", "");
+                return;
+            }
+
+            try {
+                provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+                const accounts = await provider.send("eth_accounts", []);
+                if (!accounts || accounts.length === 0) {
+                    await refreshNetworkState();
+                    setStatus("Chưa kết nối ví", "");
+                    return;
+                }
+
+                signer = provider.getSigner();
+                currentAccount = accounts[0];
+                contract = new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
+
+                walletLine.textContent = `Ví: ${shortAddress(currentAccount)}`;
+                connectBtn.classList.add("hidden");
+                disconnectBtn.classList.remove("hidden");
+
+                await refreshNetworkState();
+                await refreshBalance();
+                checkCooldown();
+                setStatus(`Đã kết nối: ${shortAddress(currentAccount)}`, "connected");
+            } catch (error) {
+                setStatus(`Lỗi khởi tạo ví: ${extractError(error)}`, "error");
+            }
+        }
+
+        connectBtn.addEventListener("click", connectWallet);
+        switchBtn.addEventListener("click", switchNetwork);
+        claimBtn.addEventListener("click", claimToken);
+        disconnectBtn.addEventListener("click", disconnectWallet);
+
+        registerWalletListeners();
+        tryAutoReconnect();
+        updateClaimButtonState();
+    </script>
 </body>
 </html>
