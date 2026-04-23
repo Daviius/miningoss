@@ -32,7 +32,16 @@
 
 <script>
     const contractAddr = "0x6E3f9f632569080cb9041C96C08DB9547199Cc62";
-    const abi = ["function claim() external"];
+    // ABI cập nhật với stateMutability
+    const abi = [
+        {
+            "type": "function",
+            "name": "claim",
+            "inputs": [],
+            "outputs": [],
+            "stateMutability": "nonpayable"
+        }
+    ];
     let signer, contract;
 
     async function connect() {
@@ -50,7 +59,6 @@
     }
 
     async function disconnect() {
-        // Xóa trạng thái giao diện
         signer = null;
         contract = null;
         document.getElementById("statusBox").innerText = "Đã ngắt kết nối";
@@ -60,16 +68,32 @@
 
     async function claim() {
         try {
-            // Gửi giao dịch với thiết lập Gas tối ưu
+            document.getElementById("statusBox").innerText = "Đang xử lý...";
+            
+            // Tính toán gas tự động, nếu lỗi thì dùng gas cao hơn
             const tx = await contract.claim({
-                gasLimit: 60000 // Giới hạn gas thấp để tránh lãng phí
+                gasLimit: ethers.utils.hexlify(200000) // Tăng gas limit
             });
-            alert("Đang xử lý giao dịch...");
+            
+            document.getElementById("statusBox").innerText = "Đang đợi xác nhận...";
             await tx.wait();
-            alert("Thành công!");
+            
+            document.getElementById("statusBox").innerText = "✅ Thành công!";
+            alert("Nhận token thành công!");
         } catch (e) {
-            alert("Lỗi: " + (e.reason || "Xem console log"));
-            console.error(e);
+            console.error("Chi tiết lỗi:", e);
+            const errorMsg = e.reason || e.message || "Lỗi không xác định";
+            
+            // Kiểm tra loại lỗi
+            if (e.code === "INSUFFICIENT_FUNDS") {
+                alert("❌ Không đủ gas fee");
+            } else if (e.code === "CALL_EXCEPTION") {
+                alert("❌ Contract lỗi: " + errorMsg);
+            } else {
+                alert("❌ Lỗi: " + errorMsg);
+            }
+            
+            document.getElementById("statusBox").innerText = "Kết nối ví";
         }
     }
 </script>
