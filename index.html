@@ -545,7 +545,11 @@
             });
 
             window.ethereum.on("chainChanged", async () => {
-                if (!provider) return;
+                provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+                if (currentAccount) {
+                    signer = provider.getSigner();
+                    contract = new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
+                }
                 await refreshNetworkState();
                 if (currentAccount) {
                     await refreshBalance();
