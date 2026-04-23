@@ -29,7 +29,7 @@ Ví dụ:
 - `name_`: `OSS Advanced`
 - `symbol_`: `OSSA`
 - `totalSupply_`: `1000000000 ether` (1 tỷ token, 18 decimals)
-- `router_`: PancakeSwap router trên Arbitrum Sepolia (điền đúng địa chỉ router bạn dùng)
+- `router_`: địa chỉ router DEX tương thích UniswapV2 trên Arbitrum Sepolia (Pancake/Uniswap/Sushi tùy môi trường)
 - `admin_`: ví quản trị
 
 ## 3) Script deploy mẫu (Hardhat + ethers v6)
@@ -88,9 +88,11 @@ module.exports = {
 Thiết lập thêm (nếu cần):
 
 - `setSwapSettings(bool enabled, uint256 threshold)`
+- `setLiquiditySlippage(uint16 slippageBps)`
+- `processLiquidity()` (trigger thủ công khi cần)
 - `setLimits(uint256 maxTx, uint256 maxWallet)`
 - `setFees(uint16 burnBps, uint16 reflectionBps, uint16 liquidityBps)`
 - `setBlacklist(address account, bool status)`
 - `pause()` / `unpause()`
 
-> Gợi ý: đặt `liquidityReceiver = 0x000000000000000000000000000000000000dEaD` để LP nhận được bị lock vĩnh viễn.
+> Mặc định `liquidityReceiver` đã là `0x000000000000000000000000000000000000dEaD` để LP lock vĩnh viễn.

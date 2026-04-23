@@ -14,6 +14,7 @@ interface IUniswapV2Factory {
 interface IUniswapV2Router02 {
     function factory() external pure returns (address);
     function WETH() external pure returns (address);
+    function getAmountsOut(uint256 amountIn, address[] calldata path) external view returns (uint256[] memory amounts);
 
     function swapExactTokensForETHSupportingFeeOnTransferTokens(
         uint256 amountIn,
@@ -39,6 +40,7 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
     bytes32 public constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
 
     uint16 public constant FEE_DENOMINATOR = 10_000;
+    uint16 public constant MAX_TOTAL_FEE_BPS = 1_000; // hard cap: 10%
     uint256 private constant ACC_PRECISION = 1e36;
     address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
@@ -54,6 +56,7 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
     uint256 public maxWalletAmount;
 
     uint256 public swapTokensAtAmount;
+    uint16 public liquiditySlippageBps = 300; // 3%
     bool public swapEnabled = true;
     bool private inSwap;
 
@@ -76,6 +79,7 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
     event RouterUpdated(address indexed router, address indexed pair);
     event SwapSettingsUpdated(bool swapEnabled, uint256 swapTokensAtAmount);
     event LiquidityReceiverUpdated(address indexed receiver);
+    event LiquiditySlippageUpdated(uint16 slippageBps);
     event ReflectionDistributed(uint256 amount, uint256 accReflectionPerToken);
     event ReflectionPaid(address indexed account, uint256 amount);
     event AutoLiquidityAdded(uint256 tokenAmount, uint256 ethAmount, uint256 liquidityTokens);
@@ -86,6 +90,7 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
     error MaxWalletExceeded(uint256 newBalance, uint256 maxAllowed);
     error InvalidFeeConfig();
     error InvalidValue();
+    error ProtectedAddress(address account);
 
     modifier lockSwap() {
         inSwap = true;
@@ -145,6 +150,14 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
     }
 
     function setBlacklist(address account, bool status) external onlyRole(BLACKLISTER_ROLE) {
+        if (
+            account == address(0) ||
+            account == address(this) ||
+            account == address(dexRouter) ||
+            account == lpPair
+        ) {
+            revert ProtectedAddress(account);
+        }
         isBlacklisted[account] = status;
         emit AddressBlacklisted(account, status);
     }
@@ -162,7 +175,7 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
     }
 
     function setFees(uint16 burnBps, uint16 reflectionBps, uint16 liquidityBps) external onlyRole(CONFIG_ROLE) {
-        if (uint256(burnBps) + uint256(reflectionBps) + uint256(liquidityBps) > 1_000) {
+        if (uint256(burnBps) + uint256(reflectionBps) + uint256(liquidityBps) > MAX_TOTAL_FEE_BPS) {
             revert InvalidFeeConfig();
         }
 
@@ -212,6 +225,18 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
         emit LiquidityReceiverUpdated(receiver);
     }
 
+    function setLiquiditySlippage(uint16 slippageBps) external onlyRole(CONFIG_ROLE) {
+        if (slippageBps > 2_000) revert InvalidValue(); // <=20%
+        liquiditySlippageBps = slippageBps;
+        emit LiquiditySlippageUpdated(slippageBps);
+    }
+
+    function processLiquidity() external onlyRole(CONFIG_ROLE) {
+        if (liquidityReserve > 0) {
+            _swapAndLiquify(liquidityReserve);
+        }
+    }
+
     function totalFeeBps() public view returns (uint16) {
         return burnFeeBps + reflectionFeeBps + liquidityFeeBps;
     }
@@ -236,8 +261,6 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
 
         _accrue(from);
         _accrue(to);
-
-        _enforceLimits(from, to, amount);
 
         uint256 sendAmount = amount;
         uint256 burnAmount;
@@ -267,6 +290,8 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
             }
         }
 
+        _enforceLimits(from, to, amount, sendAmount);
+
         super._update(from, to, sendAmount);
 
         if (swapEnabled && !inSwap && to == lpPair && liquidityReserve >= swapTokensAtAmount) {
@@ -280,13 +305,13 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
         _refreshDebt(to);
     }
 
-    function _enforceLimits(address from, address to, uint256 amount) internal view {
+    function _enforceLimits(address from, address to, uint256 amount, uint256 receivedAmount) internal view {
         if (!isLimitExempt[from] && !isLimitExempt[to] && amount > maxTxAmount) {
             revert MaxTxExceeded(amount, maxTxAmount);
         }
 
         if (!isLimitExempt[to] && to != lpPair && to != DEAD) {
-            uint256 newBalance = super.balanceOf(to) + amount;
+            uint256 newBalance = super.balanceOf(to) + receivedAmount;
             if (newBalance > maxWalletAmount) revert MaxWalletExceeded(newBalance, maxWalletAmount);
         }
     }
@@ -345,22 +370,26 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = dexRouter.WETH();
+        uint256[] memory quotedOut = dexRouter.getAmountsOut(half, path);
+        uint256 minEthOut = (quotedOut[quotedOut.length - 1] * (FEE_DENOMINATOR - liquiditySlippageBps)) / FEE_DENOMINATOR;
 
         dexRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
             half,
-            0,
+            minEthOut,
             path,
             address(this),
             block.timestamp
         );
 
         uint256 ethReceived = address(this).balance - initialEthBalance;
+        uint256 minToken = (otherHalf * (FEE_DENOMINATOR - liquiditySlippageBps)) / FEE_DENOMINATOR;
+        uint256 minEth = (ethReceived * (FEE_DENOMINATOR - liquiditySlippageBps)) / FEE_DENOMINATOR;
 
         (, , uint256 liquidity) = dexRouter.addLiquidityETH{value: ethReceived}(
             address(this),
             otherHalf,
-            0,
-            0,
+            minToken,
+            minEth,
             liquidityReceiver,
             block.timestamp
         );
