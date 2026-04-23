@@ -386,7 +386,7 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
         uint256 minToken = (otherHalf * (FEE_DENOMINATOR - liquiditySlippageBps)) / FEE_DENOMINATOR;
         uint256 minEth = (ethReceived * (FEE_DENOMINATOR - liquiditySlippageBps)) / FEE_DENOMINATOR;
 
-        (uint256 amountTokenUsed, , uint256 liquidity) = dexRouter.addLiquidityETH{value: ethReceived}(
+        (uint256 amountTokenUsed, uint256 amountEthUsed, uint256 liquidity) = dexRouter.addLiquidityETH{value: ethReceived}(
             address(this),
             otherHalf,
             minToken,
@@ -402,6 +402,6 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
             liquidityReserve -= consumedLiquidityTokens;
         }
 
-        emit AutoLiquidityAdded(amountTokenUsed, ethReceived, liquidity);
+        emit AutoLiquidityAdded(amountTokenUsed, amountEthUsed, liquidity);
     }
 }
