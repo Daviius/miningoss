@@ -201,6 +201,9 @@
         const TARGET_CHAIN_ID_DEC = 421614;
         const RPC_URL = "https://sepolia-rollup.arbitrum.io/rpc";
         const COOLDOWN_TIME = 24 * 60 * 60 * 1000;
+        const MS_PER_HOUR = 60 * 60 * 1000;
+        const MS_PER_MINUTE = 60 * 1000;
+        const MS_PER_SECOND = 1000;
         const DAILY_REWARD = "0.5";
         const DAILY_REWARD_WEI = ethers.utils.parseUnits(DAILY_REWARD, 18);
 
@@ -280,10 +283,17 @@
         }
 
         function renderCountdown(ms) {
-            const hours = Math.floor(ms / 3600000);
-            const minutes = Math.floor((ms % 3600000) / 60000);
-            const seconds = Math.floor((ms % 60000) / 1000);
+            const hours = Math.floor(ms / MS_PER_HOUR);
+            const minutes = Math.floor((ms % MS_PER_HOUR) / MS_PER_MINUTE);
+            const seconds = Math.floor((ms % MS_PER_MINUTE) / MS_PER_SECOND);
             cooldownBox.textContent = `⏱️ Quay lại sau: ${hours}h ${minutes}m ${seconds}s`;
+        }
+
+        function formatTokenBalance(rawBalance) {
+            const [integerPart, decimalPart = ""] = ethers.utils.formatUnits(rawBalance, 18).split(".");
+            const groupedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            const trimmedDecimal = decimalPart.slice(0, 6).replace(/0+$/, "");
+            return trimmedDecimal ? `${groupedInteger}.${trimmedDecimal}` : groupedInteger;
         }
 
         function checkCooldown() {
@@ -363,11 +373,7 @@
 
             try {
                 const raw = await contract.balanceOf(currentAccount);
-                const formatted = Number(ethers.utils.formatUnits(raw, 18));
-                balanceLine.textContent = `Số dư OSS: ${formatted.toLocaleString("en-US", {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 6
-                })}`;
+                balanceLine.textContent = `Số dư OSS: ${formatTokenBalance(raw)}`;
             } catch (error) {
                 balanceLine.textContent = "Số dư OSS: Không đọc được";
             }
