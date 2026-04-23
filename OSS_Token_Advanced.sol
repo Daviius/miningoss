@@ -248,6 +248,7 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
     }
 
     function _update(address from, address to, uint256 amount) internal override {
+        // Khi pause: chỉ chặn transfer thường, vẫn cho phép mint/burn nội bộ nếu có.
         if (paused() && from != address(0) && to != address(0)) revert TransferPaused();
         if (isBlacklisted[from]) revert BlacklistedAddress(from);
         if (isBlacklisted[to]) revert BlacklistedAddress(to);
@@ -385,7 +386,7 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
         uint256 minToken = (otherHalf * (FEE_DENOMINATOR - liquiditySlippageBps)) / FEE_DENOMINATOR;
         uint256 minEth = (ethReceived * (FEE_DENOMINATOR - liquiditySlippageBps)) / FEE_DENOMINATOR;
 
-        (, , uint256 liquidity) = dexRouter.addLiquidityETH{value: ethReceived}(
+        (uint256 amountTokenUsed, , uint256 liquidity) = dexRouter.addLiquidityETH{value: ethReceived}(
             address(this),
             otherHalf,
             minToken,
@@ -394,8 +395,13 @@ contract OSS_Token_Advanced is ERC20, Ownable, AccessControl, Pausable {
             block.timestamp
         );
 
-        liquidityReserve -= tokenAmount;
+        uint256 consumedLiquidityTokens = half + amountTokenUsed;
+        if (consumedLiquidityTokens > liquidityReserve) {
+            liquidityReserve = 0;
+        } else {
+            liquidityReserve -= consumedLiquidityTokens;
+        }
 
-        emit AutoLiquidityAdded(otherHalf, ethReceived, liquidity);
+        emit AutoLiquidityAdded(amountTokenUsed, ethReceived, liquidity);
     }
 }

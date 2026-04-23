@@ -32,6 +32,8 @@ Ví dụ:
 - `router_`: địa chỉ router DEX tương thích UniswapV2 trên Arbitrum Sepolia (Pancake/Uniswap/Sushi tùy môi trường)
 - `admin_`: ví quản trị
 
+> Nên lấy router từ tài liệu chính thức của DEX bạn chọn (không copy từ nguồn không xác minh).
+
 ## 3) Script deploy mẫu (Hardhat + ethers v6)
 
 Tạo file `scripts/deploy-arbitrum-sepolia.js` trong project deploy:
